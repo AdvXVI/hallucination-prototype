@@ -163,7 +163,7 @@ function renderHeader() {
           <button class="dropdown-item" data-action="open-gallery" role="menuitem"><span class="dropdown-item-icon">📋</span>Gallery</button>
           ${hasResults ? `
           <div class="menu-divider"></div>
-          <button class="dropdown-item" data-action="open-verify" role="menuitem"><span class="dropdown-item-icon">🔍</span>Verify Claims</button>
+          <button class="dropdown-item" data-action="open-verify" role="menuitem" ${STATE.verificationLoading ? 'disabled style="opacity:.4;pointer-events:none"' : ''}><span class="dropdown-item-icon">🔍</span>Verify Claims${STATE.verificationLoading ? ' …' : ''}</button>
           <button class="dropdown-item" data-action="open-tour" role="menuitem"><span class="dropdown-item-icon">🎓</span>Tour</button>
           <button class="dropdown-item" data-action="open-quiz" role="menuitem"><span class="dropdown-item-icon">🧠</span>Quiz</button>
           ` : ''}
@@ -402,6 +402,7 @@ function renderSentenceCard(s, resultId, risks, index) {
         <div class="sc-meta">
           <span class="sc-accuracy">${s.verifiable ? `${s.accuracy_confidence ?? '?'}%` : 'N/A'}</span>
           ${s.verifiable && s.analyst_certainty != null ? `<span class="sc-certainty">analyst: ${s.analyst_certainty}%</span>` : ''}
+          ${s.self_confidence != null ? `<span class="sc-certainty sc-self">self: ${s.self_confidence}%</span>` : ''}
           ${hasCat ? `<span class="sc-tag">${escHtml(catLabel(s.category))}</span>` : ''}
           ${ov ? `<span class="override-badge">⚑ Override</span>` : ''}
           <span style="font-size:.625rem;color:var(--text-muted)">${expanded ? '▴' : '▾'}</span>
@@ -413,9 +414,11 @@ function renderSentenceCard(s, resultId, risks, index) {
       ${s.verifiable ? `<div class="conf-bars">
         <div class="conf-bar-row"><span class="conf-bar-label">Accuracy Confidence${tip('How likely this sentence is factually correct. Below the threshold = likely hallucination.')}</span><div class="conf-bar-track"><div class="conf-bar-fill accuracy" style="width:${s.accuracy_confidence ?? 0}%;background:${accColor}"></div></div><span class="conf-bar-pct" style="color:${accColor}">${s.accuracy_confidence ?? 0}%</span></div>
         <div class="conf-bar-row"><span class="conf-bar-label">Analyst Certainty${tip('How confident the analyst is in its own assessment. Low certainty means treat the verdict with caution.')}</span><div class="conf-bar-track"><div class="conf-bar-fill certainty" style="width:${s.analyst_certainty ?? 0}%"></div></div><span class="conf-bar-pct" style="color:#8B6FE8">${s.analyst_certainty ?? 0}%</span></div>
+        ${s.self_confidence != null ? `<div class="conf-bar-row"><span class="conf-bar-label">Self-Confidence${tip('How confident the hallucinator itself is that this sentence is accurate. Compare with Accuracy Confidence to spot overconfidence.')}</span><div class="conf-bar-track"><div class="conf-bar-fill self" style="width:${s.self_confidence}%"></div></div><span class="conf-bar-pct" style="color:var(--c-amber)">${s.self_confidence}%</span></div>` : ''}
       </div>` : ''}
       ${s.explanation ? `<div class="detail-section"><div class="detail-section-title">Analysis</div>${escHtml(s.explanation)}</div>` : ''}
-      ${s.verification_suggestion ? `
+      ${s.is_hallucination && s.correct_version ? `<div class="correct-version"><div class="detail-section-title" style="color:var(--c-green-tx);margin-bottom:.25rem">Likely Accurate Version</div>${escHtml(s.correct_version)}</div>` : ''}
+      ${s._verified_html || s._verified_query ? `<div class="detail-section"><div class="detail-section-title">Verified${s._verified_query ? ` <a href="https://duckduckgo.com/?q=${encodeURIComponent(s._verified_query)}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🦆 DDG</a> <a href="https://www.google.com/search?q=${encodeURIComponent(s._verified_query)}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🔍 Google</a>` : ''}</div>${s._verified_html ? `${s._verified_html}<div style="margin-top:.25rem"><button class="btn-ghost btn-sm" data-action="verify-claim-inline" data-result-id="${resultId}" data-idx="${s.index}">🔄 Re-verify</button><div id="verify-inline-${resultId}-${s.index}" style="margin-top:.25rem"></div></div>` : ''}</div>` : (s.verification_suggestion ? `
       <div class="detail-section">
         <div class="detail-section-title">Verification Suggestion</div>
         ${escHtml(s.verification_suggestion)}
@@ -423,8 +426,7 @@ function renderSentenceCard(s, resultId, risks, index) {
           <button class="btn-ghost btn-sm" data-action="verify-claim-inline" data-result-id="${resultId}" data-idx="${s.index}">🔍 Verify Claim</button>
           <div id="verify-inline-${resultId}-${s.index}" style="margin-top:.25rem"></div>
         </div>
-      </div>` : ''}
-      ${s.is_hallucination && s.correct_version ? `<div class="correct-version"><div class="detail-section-title" style="color:var(--c-green-tx);margin-bottom:.25rem">Likely Accurate Version</div>${escHtml(s.correct_version)}</div>` : ''}
+      </div>` : '')}
       <div><div class="detail-section-title">Human Override</div>
         <div class="override-controls">
           <button class="override-btn confirm-accurate ${ov === 'accurate' ? 'active' : ''}" data-action="override" data-result-id="${resultId}" data-idx="${s.index}" data-type="accurate" aria-pressed="${ov === 'accurate'}">✓ Confirm Accurate</button>
@@ -449,17 +451,18 @@ function renderConfidenceMap(result) {
       <div class="cm-detail-head">
         <span class="cm-detail-score">${active.verifiable ? `${active.accuracy_confidence ?? '?'}% accurate` : 'Cannot assess'}</span>
         ${active.verifiable && active.analyst_certainty != null ? `<span style="font-size:.6875rem;color:var(--text-muted);font-family:var(--font-mono)">analyst: ${active.analyst_certainty}%</span>` : ''}
+        ${active.self_confidence != null ? `<span style="font-size:.6875rem;color:var(--c-amber);font-family:var(--font-mono)">self: ${active.self_confidence}%</span>` : ''}
         ${hasCat ? `<span class="sc-tag">${escHtml(catLabel(active.category))}</span>` : ''}
         ${STATE.manualOverrides?.[`${result.id}-${active.index}`] ? `<span class="override-badge">⚑ Overridden</span>` : ''}
       </div>
       ${active.explanation ? `<div class="cm-detail-expl">${escHtml(active.explanation)}</div>` : ''}
-      ${active.verification_suggestion ? `<div class="cm-detail-expl" style="margin-top:.375rem;font-size:.75rem;opacity:.8">
+      ${active._verified_html ? `<div style="margin-top:.5rem">${active._verified_html}</div>` : (active.verification_suggestion ? `<div class="cm-detail-expl" style="margin-top:.375rem;font-size:.75rem;opacity:.8">
         <strong>Verify:</strong> ${escHtml(active.verification_suggestion)}
         <div style="margin-top:.375rem">
           <button class="btn-ghost btn-sm" data-action="verify-claim-inline" data-result-id="${result.id}" data-idx="${active.index}">🔍 Verify Claim</button>
           <div id="verify-inline-${result.id}-${active.index}" style="margin-top:.25rem"></div>
         </div>
-      </div>` : ''}
+      </div>` : '')}
       ${active.is_hallucination && active.correct_version ? `<div style="margin-top:.5rem;padding:.5rem .625rem;border-radius:var(--r-sm);background:var(--c-green-bg);border:1px solid var(--c-green-bd);font-size:.75rem;color:var(--c-green-tx)"><strong>Likely accurate:</strong> ${escHtml(active.correct_version)}</div>` : ''}
     </div>`;
   }

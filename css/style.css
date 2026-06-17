@@ -2519,6 +2519,9 @@ input[type="range"] {
   color: var(--text-muted);
   white-space: nowrap;
 }
+.sc-self {
+  color: var(--c-amber) !important;
+}
 
 .sc.high .sc-accuracy {
   color: var(--c-green-tx);
@@ -2677,6 +2680,10 @@ input[type="range"] {
 
 .conf-bar-fill.certainty {
   background: #8B6FE8;
+}
+
+.conf-bar-fill.self {
+  background: var(--c-amber);
 }
 
 .detail-section {

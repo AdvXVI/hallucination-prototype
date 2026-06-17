@@ -7,6 +7,7 @@ let _abortController = null;
 let _autoSaveTimer = null;
 let _lastFocusedEl = null;
 let _focusTrapEl = null;
+let _verifyingSentences = new Set();
 
 // ── LoadingManager — named operation tracking ─────────────────────────────────
 
@@ -401,9 +402,21 @@ async function runHallucinatorsWithPrompt(prompt, whyItWorks, topic) {
     const sentences = splitSentences(response);
     const riskScan = sentences.map(s => scanSentenceRisks(s));
     try {
-      const ar = await callAI(STATE.analyst, ANALYST_SYSTEM, `Analyze sentences from an AI response about "${topicLabel}":\n${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}`, signal);
+      const [ar, sa] = await Promise.all([
+        callAI(STATE.analyst, ANALYST_SYSTEM, `Analyze sentences from an AI response about "${topicLabel}":\n${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}`, signal),
+        callAI(h, SELF_ASSESS_SYSTEM, `You answered: "${topicLabel}"\n\nYour verbatim answer was:\n${response}\n\nNow rate each sentence for accuracy confidence.`, signal).catch(() => null)
+      ]);
       const analysis = JSON.parse(stripMarkdown(ar));
-      return { ...base, status: 'complete', response, analysis: analysis.map((s, idx) => ({ ...s, index: idx })), riskScan, error: null };
+      let selfScores = null;
+      try { if (sa) selfScores = JSON.parse(stripMarkdown(sa)); } catch {}
+      return {
+        ...base, status: 'complete', response,
+        analysis: analysis.map((s, idx) => ({
+          ...s, index: idx,
+          self_confidence: Array.isArray(selfScores) ? selfScores.find(sa => sa.sentence_index === idx)?.self_confidence ?? null : null
+        })),
+        riskScan, error: null
+      };
     } catch (e) {
       return { ...base, status: 'analysis-failed', response, analysis: null, riskScan, error: `Analysis error: ${e.message}` };
     }
@@ -859,8 +872,9 @@ async function runPlaygroundBatch() {
 // ── Verification handlers ──────────────────────────────────────────────────────
 
 async function openVerifyPanel() {
+  if (STATE.verificationLoading) return;
   // If no results yet, kick off verification
-  if (!STATE.verificationResults && !STATE.verificationLoading) {
+  if (!STATE.verificationResults) {
     STATE.verificationLoading = true;
     const el = document.getElementById('verify-content'); if (el) el.innerHTML = renderVerificationContent();
     document.getElementById('verify-overlay').classList.remove('hidden');
@@ -871,6 +885,23 @@ async function openVerifyPanel() {
         const results = await batchVerifyClaims(activeResult.analysis, _abortController?.signal);
         STATE.verificationResults = results;
         STATE.verificationLoading = false;
+        // ---- Update sentence analysis from batch verification ----
+        for (const r of results) {
+          if (!r.verified) continue;
+          const s = activeResult.analysis[r.sentence?.index];
+          if (!s) continue;
+          const certainty = r.confidence ?? 0;
+          if (r.verified === true) {
+            s.accuracy_confidence = Math.max(certainty, 70);
+            s.is_hallucination = false;
+          } else if (r.verified === false) {
+            s.accuracy_confidence = Math.min(30, 100 - certainty);
+            s.is_hallucination = true;
+          }
+          if (r.correctVersion) s.correct_version = r.correctVersion;
+          if (r.explanation) s.explanation = `[Verified: ${r.verified === true ? 'Supported' : 'Refuted'}] ${r.explanation}`;
+          s._verified_query = r.query || '';
+        }
         const cel = document.getElementById('verify-content'); if (cel) cel.innerHTML = renderVerificationContent();
         showToast('Verification complete', 'success');
       } catch (e) {
@@ -891,14 +922,31 @@ async function openVerifyPanel() {
 function closeVerifyPanel() { document.getElementById('verify-overlay').classList.add('hidden'); releaseFocus(); }
 function handleVerifyOverlayClick(e) { if (e.target === document.getElementById('verify-overlay')) closeVerifyPanel(); }
 
+function reRenderSentenceCard(resultId, idx) {
+  const result = STATE.hallucinatorResults.find(r => r.id === resultId);
+  if (!result?.analysis?.[idx]) return;
+  const sentence = result.analysis[idx];
+  const oldCard = document.querySelector(`.sentence-list .sc[data-sentence-index="${idx}"]`);
+  if (!oldCard) return;
+  const newHTML = renderSentenceCard(sentence, resultId, result.riskScan?.[idx] || [], idx);
+  oldCard.outerHTML = newHTML;
+}
+
 async function verifySentenceInline(resultId, idx) {
+  const key = `${resultId}-${idx}`;
+  if (_verifyingSentences.has(key)) return;
+  _verifyingSentences.add(key);
+
   const result = STATE.hallucinatorResults.find(r => r.id === resultId);
   const sentence = result?.analysis?.[idx];
-  if (!sentence) return;
+  if (!sentence) { _verifyingSentences.delete(key); return; }
 
   const containerId = `verify-inline-${resultId}-${idx}`;
   const container = document.getElementById(containerId);
-  if (!container) return;
+  if (!container) { _verifyingSentences.delete(key); return; }
+
+  const btn = container.previousElementSibling;
+  if (btn?.tagName === 'BUTTON') btn.disabled = true;
 
   container.innerHTML = `<span style="font-size:.75rem;color:var(--text-muted)">🔍 Searching web sources...</span>`;
 
@@ -958,7 +1006,7 @@ Is this claim factually correct? Base your verdict on the search results and you
       </div>`;
     }
 
-    container.innerHTML = `
+    const verifiedHTML = `
       <div style="background:var(--card-raised); border:1px solid var(--border); border-radius:var(--r-sm); padding:.5rem; margin-top:.25rem">
         <div style="display:flex; align-items:center; gap:.5rem">
           <span style="font-size:.875rem">${statusIcon}</span>
@@ -975,11 +1023,30 @@ Is this claim factually correct? Base your verdict on the search results and you
         ${sourcesHTML}
       </div>`;
 
+    container.innerHTML = verifiedHTML;
+
+    // ---- Update the sentence analysis from the AI verdict ----
+    if (verified === true) {
+      sentence.accuracy_confidence = Math.max(certainty, 70);
+      sentence.is_hallucination = false;
+    } else if (verified === false) {
+      sentence.accuracy_confidence = Math.min(30, 100 - certainty);
+      sentence.is_hallucination = true;
+    }
+    if (correctVersion) sentence.correct_version = correctVersion;
+    if (explanation) sentence.explanation = `[Verified: ${statusLabel}] ${explanation}`;
+    sentence._verified_html = verifiedHTML;
+    sentence._verified_query = query;
+
+    reRenderSentenceCard(resultId, idx);
+
+    _verifyingSentences.delete(key);
     showToast('Inline verification complete', 'success');
   } catch (e) {
     console.error(e);
     container.innerHTML = `<button class="btn-ghost btn-sm" data-action="verify-claim-inline" data-result-id="${resultId}" data-idx="${idx}">🔍 Retry Verification</button>
       <div style="font-size:.6875rem; color:var(--c-red-tx); margin-top:.25rem">Verification failed: ${escHtml(e.message)}</div>`;
+    _verifyingSentences.delete(key);
     showToast('Inline verification failed: ' + e.message, 'error');
   }
 }

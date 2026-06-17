@@ -207,6 +207,20 @@ Guidelines for each field:
 - correct_version (string or null): if verified is false, provide the accurate version; otherwise null
 - reason (string): specific detail about which facts matched or contradicted the claim`;
 
+const SELF_ASSESS_SYSTEM = `You are an AI that has just answered a question. For each sentence in your answer, rate how confident you are that the factual claims in that sentence are accurate.
+
+Your response style and self-assessment should honestly reflect your capabilities:
+- If you are cautious, note uncertainty honestly
+- If you are confident, score accordingly
+- If you tend to fabricate specifics, reflect that honestly
+
+Return ONLY a valid JSON array — no markdown, no preamble:
+[{ "sentence_index":0, "self_confidence":85, "assessment_note":"Well-established historical fact" }]
+
+Guidelines:
+- self_confidence (0–100): 85–100 = very confident it's correct | 60–84 = likely correct | 40–59 = uncertain | 20–39 = suspect error | 0–19 = likely fabricated
+- assessment_note (string): brief one-sentence justification`;
+
 // ── Web Search / Ground Truth Verification moved to search.js ─────────────────
 // ── Prompt Mutation moved to app.js ───────────────────────────────────────────
 // ── Export Helpers moved to app.js ────────────────────────────────────────────
