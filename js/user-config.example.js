@@ -10,11 +10,14 @@
 // NEVER paste real API keys into this example file.
 //
 // WHERE TO GET KEYS:
-//   Anthropic  → https://console.anthropic.com          (paid)
-//   Groq       → https://console.groq.com               (free tier, no card)
-//   Google     → https://aistudio.google.com            (free tier)
-//   OpenAI     → https://platform.openai.com            (paid)
-//   Ollama     → https://ollama.com  (local, no key needed)
+//   Anthropic   → https://console.anthropic.com          (paid)
+//   Groq        → https://console.groq.com               (free tier, no card)
+//   Google      → https://aistudio.google.com            (free tier)
+//   OpenRouter  → https://openrouter.ai                  (free models: mistral-7b, llama-3.1-8b, gemma-2-9b, deepseek-chat, qwen-2.5-7b, phi-3-mini)
+//   DeepSeek    → https://platform.deepseek.com          (very cheap: deepseek-chat, deepseek-reasoner)
+//   Together AI → https://api.together.xyz               ($1 free credit: Llama-3.3-70B-Free, DeepSeek-R1-Distill-Llama-70B-free)
+//   OpenAI      → https://platform.openai.com            (paid)
+//   Ollama      → https://ollama.com                     (local, no key needed)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const USER_CONFIG = {
@@ -23,7 +26,7 @@ const USER_CONFIG = {
   // Evaluates hallucinator responses. Use the smartest model you have access to.
   analyst: {
     name:     'Analyst AI',
-    provider: 'anthropic',                      // anthropic | openai | groq | google | ollama | custom
+    provider: 'anthropic',                      // anthropic | openai | groq | google | openrouter | deepseek | together | ollama | custom
     model:    'claude-sonnet-4-20250514',
     apiKey:   '',                               // ← Paste your Anthropic key here
     baseUrl:  '',                               // Leave empty to use the default API URL
@@ -68,6 +71,45 @@ const USER_CONFIG = {
       provider:           'openai',
       model:              'gpt-4o-mini',
       apiKey:             '',                   // ← Paste your OpenAI key here
+      baseUrl:            '',
+      enabled:            false,
+      persona:            'unguarded',
+      customSystemPrompt: '',
+    },
+
+    // ── Example: OpenRouter (free tier — no credit card needed)
+    {
+      id:                 'h-openrouter-free',
+      name:               'OpenRouter (free)',
+      provider:           'openrouter',
+      model:              'mistralai/mistral-7b-instruct:free',   // or: meta-llama/llama-3.1-8b-instant:free, google/gemma-2-9b-it:free
+      apiKey:             '',                   // ← Paste your OpenRouter key here
+      baseUrl:            '',
+      enabled:            false,
+      persona:            'unguarded',
+      customSystemPrompt: '',
+    },
+
+    // ── Example: DeepSeek (very cheap API)
+    {
+      id:                 'h-deepseek-chat',
+      name:               'DeepSeek Chat',
+      provider:           'deepseek',
+      model:              'deepseek-chat',
+      apiKey:             '',                   // ← Paste your DeepSeek key here
+      baseUrl:            '',
+      enabled:            false,
+      persona:            'unguarded',
+      customSystemPrompt: '',
+    },
+
+    // ── Example: Together AI ($1 free credit)
+    {
+      id:                 'h-together-free',
+      name:               'Together AI',
+      provider:           'together',
+      model:              'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free',
+      apiKey:             '',                   // ← Paste your Together AI key here
       baseUrl:            '',
       enabled:            false,
       persona:            'unguarded',

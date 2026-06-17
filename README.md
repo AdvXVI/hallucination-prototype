@@ -44,10 +44,13 @@ No server, no `npm install`, no build step required. All libraries load from CDN
 | Anthropic (Claude) | No | [console.anthropic.com](https://console.anthropic.com) | `sk-ant-...` |
 | Groq | Yes ✓ | [console.groq.com](https://console.groq.com) | `gsk_...` |
 | Google Gemini | Yes ✓ | [aistudio.google.com](https://aistudio.google.com) | `AIza...` |
+| OpenRouter | Yes ✓ | [openrouter.ai](https://openrouter.ai) | `sk-or-v1-...` |
+| DeepSeek | ~Free | [platform.deepseek.com](https://platform.deepseek.com) | `sk-...` |
+| Together AI | $1 free | [api.together.xyz](https://api.together.xyz) | `tgpv1...` |
 | OpenAI | No | [platform.openai.com](https://platform.openai.com) | `sk-...` |
 | Ollama | Free ✓ | [ollama.com](https://ollama.com) | *(no key needed)* |
 
-**Recommended setup for zero cost:** Groq key for both the analyst and hallucinators. Use `llama-3.3-70b-versatile` as analyst and `llama-3.1-8b-instant` as hallucinator.
+**Recommended setup for zero cost:** Groq or OpenRouter key for both the analyst and hallucinators. OpenRouter offers many free models — try `meta-llama/llama-3.1-8b-instant:free` or `mistralai/mistral-7b-instruct:free`.
 
 ---
 
@@ -89,13 +92,16 @@ Edit `js/user-config.js` — it is well-commented and shows exactly where to pas
 **Hallucinator AIs** (recommended: Groq for free, fast inference)
 - Groq key: https://console.groq.com ← free tier, no credit card
 
-| Provider      | Free? | Where to get key               |
-|---------------|-------|--------------------------------|
-| Anthropic      | No    | console.anthropic.com          |
-| Groq           | Yes   | console.groq.com               |
-| Google Gemini  | Yes   | aistudio.google.com            |
-| OpenAI         | No    | platform.openai.com            |
-| Ollama (local) | Free  | ollama.com — no key needed     |
+| Provider       | Free? | Where to get key               |
+|----------------|-------|--------------------------------|
+| Anthropic       | No    | console.anthropic.com          |
+| Groq            | Yes   | console.groq.com               |
+| Google Gemini   | Yes   | aistudio.google.com            |
+| OpenRouter      | Yes   | openrouter.ai — free models    |
+| DeepSeek        | ~Free | platform.deepseek.com          |
+| Together AI     | $1 credit | api.together.xyz          |
+| OpenAI          | No    | platform.openai.com            |
+| Ollama (local)  | Free  | ollama.com — no key needed     |
 
 Multiple hallucinators with different providers or different API accounts (Claude #1, Claude #2) are all supported — just add entries in `user-config.js`.
 
@@ -123,14 +129,15 @@ In `user-config.js`, set `provider: 'ollama'`, `model: 'llama3.2'`, `apiKey: ''`
 
 ---
 
-## Four Result Views
+## Five Result Views
 
 | View             | What it shows |
 |------------------|---------------|
 | **⬡ Inducer**    | Every sentence annotated with accuracy %, analyst certainty %, category tag, risk badges, and expandable detail (verification suggestion, correct version, override controls) |
 | **◎ Confidence Map** | The response as flowing prose with color-coded sentence underlines. Click any sentence for details. |
-| **◈ Game Mode**  | Hidden analysis — click sentences you think are wrong, submit, see your score and the full reveal |
 | **◉ Analytics**  | Distribution bar, key metrics, hallucination category breakdown, risk factor frequency, cross-model comparison table |
+| **◐ Visualize**  | SVG charts: uncertainty ribbon, sankey flow, radar profile, category timeline, heatmap matrix |
+| **≣ Compare**    | Sentence-by-sentence alignment across models, agreement matrix, category comparison |
 
 ---
 
@@ -172,7 +179,7 @@ A sentence can score 20% accuracy with only 55% analyst certainty — meaning th
 | Key        | Action |
 |------------|--------|
 | `Esc`      | Close any open panel or exit presentation mode |
-| `1–4`      | Switch between Inducer / Confidence Map / Game / Analytics |
+| `1–5`      | Switch between Inducer / Confidence / Analytics / Visualize / Compare |
 | `P`        | Enter presentation mode (when results exist) |
 | `←` / `→` | Navigate between models (in presentation mode) |
 

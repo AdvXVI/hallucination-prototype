@@ -1160,6 +1160,22 @@ body {
   line-height: 1.4;
 }
 
+.model-select-wrap {
+  display: flex;
+  gap: .375rem;
+  align-items: stretch;
+}
+
+.model-select-wrap select {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-custom-input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ── Focus Styles ───────────────────────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--purple);
@@ -3662,7 +3678,9 @@ input[type="range"] {
 }
 
 .modal-overlay.hidden {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .modal {

@@ -12,7 +12,7 @@ const GUIDED_TOUR_STEPS = [
       <ul style="margin:.5rem 0 0 1.5rem;line-height:1.8">
         <li>Generate adversarial prompts that trigger hallucinations</li>
         <li>Compare how different models respond to the same prompt</li>
-        <li>Identify hallucination patterns using 4 analysis views</li>
+        <li>Identify hallucination patterns using 5 analysis views</li>
         <li>Verify claims against web sources</li>
       </ul>
     `,
@@ -81,23 +81,8 @@ const GUIDED_TOUR_STEPS = [
     highlight: '.mode-tab[data-mode="confidence"]',
   },
   {
-    id: 'game-mode',
-    title: 'View 3: Game Mode (◈)',
-    content: `
-      <p><strong>Game Mode</strong> hides the analysis — you guess which sentences are hallucinations:</p>
-      <ol style="margin:.5rem 0 0 1.5rem;line-height:1.8">
-        <li>Click sentences you think are wrong</li>
-        <li>Hit <strong>Submit</strong> to reveal the truth</li>
-        <li>Score: Correct hits, false positives, missed hallucinations</li>
-      </ol>
-      <p>Great for training your intuition about AI hallucination patterns!</p>
-    `,
-    action: null,
-    highlight: '.mode-tab[data-mode="game"]',
-  },
-  {
     id: 'analytics',
-    title: 'View 4: Analytics (◉) & Visualize (◐)',
+    title: 'View 3: Analytics (◉) & Visualize (◐)',
     content: `
       <p><strong>Analytics</strong> provides quantitative summaries:</p>
       <ul style="margin:.5rem 0 0 1.5rem;line-height:1.8">
@@ -113,7 +98,7 @@ const GUIDED_TOUR_STEPS = [
   },
   {
     id: 'compare',
-    title: 'View 5: Compare (≣)',
+    title: 'View 4: Compare (≣)',
     content: `
       <p>The <strong>Compare tab</strong> aligns sentences across models:</p>
       <ul style="margin:.5rem 0 0 1.5rem;line-height:1.8">
@@ -140,20 +125,6 @@ const GUIDED_TOUR_STEPS = [
     `,
     action: null,
     highlight: '[data-action="open-verify"]',
-  },
-  {
-    id: 'playground',
-    title: 'Prompt Playground (🔬)',
-    content: `
-      <p>Click <strong>🔬 Playground</strong> to test prompt mutations:</p>
-      <ul style="margin:.5rem 0 0 1.5rem;line-height:1.8">
-        <li>Auto-generates 5 prompt variants (add specificity, frame as authority, request citations, etc.)</li>
-        <li>Select variants and run batch comparison across all models</li>
-        <li>See how small prompt changes affect hallucination rates</li>
-      </ul>
-    `,
-    action: null,
-    highlight: '[data-action="open-playground"]',
   },
   {
     id: 'gallery',
@@ -216,10 +187,11 @@ let tourState = {
 function createTourOverlay() {
   const overlay = document.createElement('div');
   overlay.id = 'tour-overlay';
-  overlay.className = 'tour-overlay';
+  overlay.className = 'modal-overlay hidden';
+  overlay.style.zIndex = '400';
+  overlay.onclick = function (e) { if (e.target === overlay) closeTour(); };
   overlay.innerHTML = `
-    <div class="tour-backdrop" onclick="closeTour()"></div>
-    <div class="tour-modal" onclick="event.stopPropagation()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:520px;padding:0;overflow:hidden">
       <div class="tour-header">
         <span class="tour-step-indicator"></span>
         <button class="btn-icon" onclick="closeTour()" aria-label="Close tour">✕</button>
@@ -265,10 +237,6 @@ function openTour() {
         box-shadow: 0 0 0 3px var(--purple), 0 0 0 6px var(--bg) !important;
         border-radius: var(--r) !important;
       }
-      .tour-overlay { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; }
-      .tour-overlay.hidden { display: none; }
-      .tour-backdrop { position: absolute; inset: 0; background: var(--overlay-bg, rgba(0,0,0,.7)); }
-      .tour-modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 520px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,.5); }
       .tour-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
       .tour-step-indicator { font-family: var(--font-mono); font-size: .625rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em; }
       .tour-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
@@ -326,7 +294,7 @@ function previousTourStep() {
 
 function renderTourStep() {
   const step = GUIDED_TOUR_STEPS[tourState.currentStep];
-  const modal = tourState.overlay?.querySelector('.tour-modal');
+  const modal = tourState.overlay?.querySelector('.modal');
   if (!modal) return;
 
   modal.querySelector('.tour-step-indicator').textContent = `Step ${tourState.currentStep + 1} of ${GUIDED_TOUR_STEPS.length}`;
@@ -442,13 +410,14 @@ function openQuiz() {
   quizState.currentQuestion = 0;
   quizState.score = 0;
   quizState.answers = [];
-  
+
   const overlay = document.createElement('div');
   overlay.id = 'quiz-overlay';
-  overlay.className = 'quiz-overlay';
+  overlay.className = 'modal-overlay hidden';
+  overlay.style.zIndex = '400';
+  overlay.onclick = function (e) { if (e.target === overlay) closeQuiz(); };
   overlay.innerHTML = `
-    <div class="quiz-backdrop" onclick="closeQuiz()"></div>
-    <div class="quiz-modal" onclick="event.stopPropagation()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:580px;padding:0;overflow:hidden">
       <div class="quiz-header">
         <h3>🎓 Hallucination Knowledge Quiz</h3>
         <button class="btn-icon" onclick="closeQuiz()">✕</button>
@@ -463,12 +432,17 @@ function openQuiz() {
   `;
   document.body.appendChild(overlay);
   renderQuizQuestion();
+  requestAnimationFrame(() => overlay.classList.remove('hidden'));
 }
 
 function closeQuiz() {
   quizState.isActive = false;
   const overlay = document.getElementById('quiz-overlay');
-  if (overlay) overlay.remove();
+  if (overlay) {
+    overlay.classList.add('hidden');
+    // Remove from DOM after transition completes
+    setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 300);
+  }
 }
 
 function renderQuizQuestion() {
@@ -522,9 +496,6 @@ function renderQuizQuestion() {
     const style = document.createElement('style');
     style.id = 'quiz-styles';
     style.textContent = `
-      .quiz-overlay { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-      .quiz-backdrop { position: absolute; inset: 0; background: var(--overlay-bg, rgba(0,0,0,.7)); }
-      .quiz-modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 580px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,.5); }
       .quiz-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
       .quiz-header h3 { font-size: 1rem; font-weight: 600; }
       .quiz-body { padding: 1.25rem; overflow-y: auto; flex: 1; }

@@ -163,7 +163,6 @@ function renderHeader() {
           <button class="dropdown-item" data-action="open-gallery" role="menuitem"><span class="dropdown-item-icon">📋</span>Gallery</button>
           ${hasResults ? `
           <div class="menu-divider"></div>
-          <button class="dropdown-item" data-action="open-playground" role="menuitem"><span class="dropdown-item-icon">🔬</span>Playground</button>
           <button class="dropdown-item" data-action="open-verify" role="menuitem"><span class="dropdown-item-icon">🔍</span>Verify Claims</button>
           <button class="dropdown-item" data-action="open-tour" role="menuitem"><span class="dropdown-item-icon">🎓</span>Tour</button>
           <button class="dropdown-item" data-action="open-quiz" role="menuitem"><span class="dropdown-item-icon">🧠</span>Quiz</button>
@@ -214,7 +213,7 @@ function renderWelcome() {
       <div class="welcome-step" role="listitem">
         <div class="welcome-step-num" aria-hidden="true">Step 3</div>
         <div class="welcome-step-title">Analyze</div>
-        <div class="welcome-step-desc">Explore hallucinations across six views: Inducer, Confidence Map, Game Mode, Analytics, Visualize, and Compare.</div>
+        <div class="welcome-step-desc">Explore hallucinations across five views: Inducer, Confidence Map, Analytics, Visualize, and Compare.</div>
       </div>
     </div>
     <button class="btn-primary" data-action="open-settings" style="margin-top:1rem">⚙ Open Settings to Get Started</button>
@@ -366,7 +365,6 @@ function renderModePanel() {
   } else {
     if (STATE.activeMode === 'inducer') content = renderInducer(result);
     if (STATE.activeMode === 'confidence') content = renderConfidenceMap(result);
-    if (STATE.activeMode === 'game') content = renderGameMode(result);
     if (STATE.activeMode === 'analytics') content = renderAnalyticsTab(result);
     if (STATE.activeMode === 'visualize') content = renderVisualizationTab(result);
     if (STATE.activeMode === 'compare') content = renderCompareTab(result);
@@ -466,26 +464,6 @@ function renderConfidenceMap(result) {
     </div>`;
   }
   return `<div class="cm-legend fade-in">${legend}<span style="margin-left:auto;font-family:var(--font-mono);font-size:.625rem;color:var(--text-muted)">click sentence → details</span></div><div class="cm-text-block fade-in" role="text" aria-label="Response with confidence highlighting">${spans}</div>${detail ? `<div class="fade-in">${detail}</div>` : ''}`;
-}
-
-// ── Game mode ────────────────────────────────────────────────────────────────
-
-function renderGameMode(result) {
-  const id = result.id, gs = STATE.gameStates[id] || { selected: new Set(), revealed: false };
-  const sentences = result.analysis, hallSet = new Set(sentences.reduce((a, s, i) => { if (s.is_hallucination) a.push(i); return a; }, []));
-  const cor = [...gs.selected].filter(i => hallSet.has(i)).length, mis = [...hallSet].filter(i => !gs.selected.has(i)).length, fp = [...gs.selected].filter(i => !hallSet.has(i)).length;
-  const perfect = cor === hallSet.size && fp === 0;
-  const top = !gs.revealed ? `<div class="banner info fade-in" style="margin-bottom:1rem"><span class="banner-icon">◈</span><span><strong>Find the hallucinations.</strong> Click sentences you think the AI got wrong. Hit Submit when ready.</span></div>` : `<div class="game-score ${perfect ? 'perfect' : 'imperfect'} fade-in"><div class="game-score-num">${cor} / ${hallSet.size}</div><div class="game-score-detail">${fp} false positive${fp !== 1 ? 's' : ''} · ${mis} missed</div></div>`;
-  const cards = sentences.map((s, i) => {
-    const isSel = gs.selected.has(i), isHall = hallSet.has(i);
-    let cls = 'unselected', icon = '', info = '';
-    if (!gs.revealed) { cls = isSel ? 'selected' : 'unselected'; icon = isSel ? '✓' : ''; }
-    else { if (isHall && isSel) { cls = 'correct-hit'; icon = '✓'; } else if (isHall) { cls = 'missed-hall'; icon = '!'; } else if (isSel) { cls = 'false-pos'; icon = '✗'; } else { cls = 'correct-skip'; } if (isHall) info = `<div class="gs-reveal-info"><strong style="font-family:var(--font-mono);font-size:.625rem;text-transform:uppercase;letter-spacing:.05em">${catLabel(s.category)}</strong> · ${escHtml(s.explanation || '')}${s.correct_version ? `<br><strong>Accurate:</strong> ${escHtml(s.correct_version)}` : ''}</div>`; }
-    return `<div class="gs ${cls} ${gs.revealed ? 'revealed' : ''}" data-action="${gs.revealed ? '' : 'game-toggle'}" data-result-id="${id}" data-idx="${i}" tabindex="0" role="button" aria-pressed="${isSel}" aria-label="Sentence ${i + 1}: ${isSel ? 'selected' : 'not selected'}">
-      <div class="gs-checkbox">${icon}</div><div style="flex:1"><div class="gs-text">${escHtml(s.text)}</div>${info}</div></div>`;
-  }).join('');
-  const btn = !gs.revealed ? `<button class="btn-primary w-full" data-action="game-submit" data-result-id="${id}" ${gs.selected.size === 0 ? 'disabled' : ''}>Submit — ${gs.selected.size} selected</button>` : `<button class="btn-ghost w-full" data-action="game-reset" data-result-id="${id}">Play Again</button>`;
-  return `${top}<div class="fade-in">${cards}</div><div style="margin-top:.75rem">${btn}</div>`;
 }
 
 // ── Analytics tab ────────────────────────────────────────────────────────────
@@ -787,10 +765,13 @@ function renderAIConfigFields(prefix, config) {
     </div>
     <div class="form-row col-2">
       <div><label class="field-label" for="${prefix}-model">Model</label>
-        <input id="${prefix}-model" list="${prefix}-model-list" value="${escHtml(config.model)}" placeholder="Enter or select a model…" />
-        <datalist id="${prefix}-model-list">
-          ${(provider.models || []).map(m => `<option value="${m}">`).join('')}
-        </datalist>
+        <div class="model-select-wrap">
+          <select id="${prefix}-model" onchange="handleModelSelect('${prefix}', this.value)">
+            ${(provider.models || []).map(m => `<option value="${m}" ${config.model === m ? 'selected' : ''}>${m}</option>`).join('')}
+            <option value="__custom__" ${provider.models && !provider.models.includes(config.model) ? 'selected' : ''}>Custom…</option>
+          </select>
+          <input id="${prefix}-model-custom" class="model-custom-input" value="${provider.models && !provider.models.includes(config.model) ? escHtml(config.model) : ''}" placeholder="Enter model name…" style="${provider.models && !provider.models.includes(config.model) ? '' : 'display:none'}" />
+        </div>
       </div>
       <div><label class="field-label" for="${prefix}-apikey">API Key</label><input id="${prefix}-apikey" type="password" value="${escHtml(config.apiKey)}" placeholder="${escHtml(provider.hint || 'API key')}" /></div>
     </div>
@@ -913,19 +894,30 @@ function renderVerificationContent() {
     <div class="stat-card"><div class="stat-value" style="color:var(--c-red-tx)">${refutedCount}</div><div class="stat-label">Refuted</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--c-gray-tx)">${unknownCount}</div><div class="stat-label">Uncertain</div></div>
   </div>
-  <div class="verify-list">${results.map((r, i) => `
+  <div class="verify-list">${results.map((r, i) => {
+    const query = r.query || (r.sentence ? r.sentence.text.slice(0, 120) : '');
+    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    return `
     <div class="verify-item fade-in" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:.75rem;margin-bottom:.5rem">
       <div class="verify-item-header" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.375rem">
         <span class="verify-status" style="font-size:.875rem">${r.verified === true ? '✅' : r.verified === false ? '❌' : '❓'}</span>
         <span class="verify-status-label" style="font-weight:600;font-size:.8125rem;color:${r.verified === true ? 'var(--c-green-tx)' : r.verified === false ? 'var(--c-red-tx)' : 'var(--c-gray-tx)'}">${r.verified === true ? 'Supported' : r.verified === false ? 'Refuted' : 'Uncertain'}</span>
-        <span class="verify-confidence" style="margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)">${r.confidence || 0}% confidence</span>
+        <span class="verify-confidence" style="margin-left:auto;font-family:var(--font-mono);font-size:.6875rem;color:var(--text-muted)">${r.confidence || 0}% certainty</span>
       </div>
-      <div class="verify-summary-text" style="font-size:.75rem;color:var(--text-sec);line-height:1.5">${escHtml(r.summary)}</div>
+      <div class="verify-sentence-text" style="font-size:.75rem;color:var(--text);line-height:1.5;margin-bottom:.375rem;font-style:italic">${escHtml(r.sentence?.text || '')}</div>
+      ${r.explanation ? `<div style="font-size:.75rem;color:var(--text-sec);margin-bottom:.25rem;line-height:1.5">${escHtml(r.explanation)}</div>` : ''}
+      ${r.reason ? `<div style="font-size:.6875rem;color:var(--text-muted);margin-bottom:.25rem">${escHtml(r.reason)}</div>` : ''}
+      ${r.correctVersion ? `<div style="margin-bottom:.375rem;padding:.375rem .5rem;border-radius:var(--r-sm);background:var(--c-green-bg);border:1px solid var(--c-green-bd);font-size:.75rem;color:var(--c-green-tx)"><strong>Correct version:</strong> ${escHtml(r.correctVersion)}</div>` : ''}
+      <div style="display:flex;gap:.5rem;margin-bottom:.375rem">
+        <a href="${searchUrl}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🦆 Search on DuckDuckGo</a>
+        <a href="${googleUrl}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🔍 Search on Google</a>
+      </div>
       ${r.sources?.length ? `<div class="verify-sources" style="margin-top:.375rem;padding-top:.375rem;border-top:1px solid var(--border);font-size:.6875rem;color:var(--text-muted)">
         <strong>Sources:</strong>
         ${r.sources.slice(0, 3).map(s => `<div style="margin-top:.375rem;line-height:1.45">• <a href="${s.url}" target="_blank" style="color:var(--purple);text-decoration:underline;font-weight:500">${escHtml(s.title || s.url)}</a> <span style="opacity:.65">(${s.source})</span><br><span style="color:var(--text-sec);font-size:.6875rem;display:block;margin-top:2px;margin-left:8px">${escHtml(s.snippet)}</span></div>`).join('')}
       </div>` : ''}
-    </div>`).join('')}</div>`;
+    </div>`;}).join('')}</div>`;
 }
 
 // Make functions globally accessible

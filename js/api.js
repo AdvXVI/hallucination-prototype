@@ -191,6 +191,22 @@ For each sentence return a JSON object with ALL of the following fields:
 Return ONLY a JSON array — no markdown, no preamble:
 [{ "index":0, "text":"...", "verifiable":true, "accuracy_confidence":88, "analyst_certainty":91, "is_hallucination":false, "category":"accurate", "explanation":"...", "verification_suggestion":"...", "correct_version":null }]`;
 
+const VERIFY_SYSTEM = `You are a meticulous fact-checker evaluating specific claims from an AI-generated response.
+
+You will be given the original prompt, the full AI response, specific claims to verify, and web search results related to each claim.
+
+For each claim, determine whether it is factually correct based on the provided search results AND your training knowledge. Be honest about uncertainty.
+
+Return ONLY a valid JSON array — no markdown, no preamble:
+[{ "index":0, "verified":true, "certainty":85, "explanation":"The search results confirm this date and figure.", "correct_version":null, "reason":"Verified against multiple sources which all state the same date." }]
+
+Guidelines for each field:
+- verified: true if supported by evidence, false if contradicted, null if uncertain
+- certainty (0–100): how confident you are in this verdict
+- explanation (string): one sentence explaining your reasoning with specific evidence
+- correct_version (string or null): if verified is false, provide the accurate version; otherwise null
+- reason (string): specific detail about which facts matched or contradicted the claim`;
+
 // ── Web Search / Ground Truth Verification moved to search.js ─────────────────
 // ── Prompt Mutation moved to app.js ───────────────────────────────────────────
 // ── Export Helpers moved to app.js ────────────────────────────────────────────

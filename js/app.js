@@ -62,7 +62,7 @@ let STATE = {
   adversarialPrompt: null, whyItWorks: null,
   hallucinatorResults: [], activeResultId: null,
   activeMode: 'inducer', cmActiveIdx: null,
-  gameStates: {}, expandedSentences: {}, manualOverrides: {},
+  expandedSentences: {}, manualOverrides: {},
   confidenceThreshold: DEFAULT_CONFIDENCE_THRESHOLD,
   autoSaveConfig: true,
   autoLoadConfig: true,
@@ -336,7 +336,7 @@ async function handleGenerate(topicOverride) {
     loading: true, loadingStep: 1, error: null, adversarialPrompt: null, whyItWorks: null,
     reviewPrompt: null, reviewPromptOriginal: null, reviewWhyItWorks: null,
     hallucinatorResults: [], activeResultId: null, cmActiveIdx: null,
-    gameStates: {}, expandedSentences: {}, manualOverrides: {}, waitingForReview: false, isReadOnly: false
+    expandedSentences: {}, manualOverrides: {}, waitingForReview: false, isReadOnly: false
   });
   try {
     const raw = await callAI(STATE.analyst, ADVERSARIAL_SYSTEM, `Topic: ${topic}`, _abortController.signal);
@@ -484,7 +484,6 @@ async function restoreHistoryRun(id) {
     activeResultId: item.hallucinatorResults.find(r => r.status === 'complete')?.id || item.hallucinatorResults[0]?.id || null,
     activeMode: 'inducer',
     cmActiveIdx: null,
-    gameStates: {},
     expandedSentences: {},
     manualOverrides: {},
     isReadOnly: true,
@@ -620,7 +619,7 @@ async function saveSettings() {
     id: 'analyst',
     name: (document.getElementById('analyst-name')?.value || '').trim() || 'Analyst AI',
     provider: document.getElementById('analyst-provider')?.value || 'anthropic',
-    model: (document.getElementById('analyst-model')?.value || '').trim(),
+    model: getModelValue('analyst') || '',
     apiKey: (document.getElementById('analyst-apikey')?.value || '').trim(),
     baseUrl: (document.getElementById('analyst-baseurl')?.value || '').trim(),
   };
@@ -630,7 +629,7 @@ async function saveSettings() {
       ...h,
       name: (document.getElementById(`${pfx}-name`)?.value || h.name).trim(),
       provider: document.getElementById(`${pfx}-provider`)?.value || h.provider,
-      model: (document.getElementById(`${pfx}-model`)?.value || h.model).trim(),
+      model: getModelValue(pfx) || h.model,
       apiKey: (document.getElementById(`${pfx}-apikey`)?.value || '').trim(),
       baseUrl: (document.getElementById(`${pfx}-baseurl`)?.value || '').trim(),
       enabled: document.getElementById(`h-enabled-${h.id}`)?.checked ?? h.enabled,
@@ -664,7 +663,7 @@ function saveCurrentFormToState() {
     ...STATE.analyst,
     name: (document.getElementById('analyst-name')?.value || STATE.analyst.name).trim(),
     provider: document.getElementById('analyst-provider')?.value || STATE.analyst.provider,
-    model: (document.getElementById('analyst-model')?.value || STATE.analyst.model).trim(),
+    model: getModelValue('analyst') || STATE.analyst.model,
     apiKey: (document.getElementById('analyst-apikey')?.value || STATE.analyst.apiKey).trim(),
     baseUrl: (document.getElementById('analyst-baseurl')?.value || STATE.analyst.baseUrl).trim(),
   };
@@ -674,7 +673,7 @@ function saveCurrentFormToState() {
       ...h,
       name: (document.getElementById(`${pfx}-name`)?.value || h.name).trim(),
       provider: document.getElementById(`${pfx}-provider`)?.value || h.provider,
-      model: (document.getElementById(`${pfx}-model`)?.value || h.model).trim(),
+      model: getModelValue(pfx) || h.model,
       apiKey: (document.getElementById(`${pfx}-apikey`)?.value || h.apiKey).trim(),
       baseUrl: (document.getElementById(`${pfx}-baseurl`)?.value || h.baseUrl).trim(),
       enabled: document.getElementById(`h-enabled-${h.id}`)?.checked ?? h.enabled,
@@ -685,9 +684,25 @@ function saveCurrentFormToState() {
 }
 
 function handleProviderChange(prefix, newProvider) {
-  // Update model datalist suggestions — IDs are always `${prefix}-model-list`
-  const modelDatalist = document.getElementById(`${prefix}-model-list`);
-  if (modelDatalist) modelDatalist.innerHTML = (PROVIDERS[newProvider]?.models || []).map(m => `<option value="${m}">`).join('');
+  // Update model select options
+  const modelSelect = document.getElementById(`${prefix}-model`);
+  if (modelSelect) {
+    const models = PROVIDERS[newProvider]?.models || [];
+    const currentVal = getModelValue(prefix);
+    modelSelect.innerHTML = models.map(m => `<option value="${m}" ${currentVal === m ? 'selected' : ''}>${m}</option>`).join('') +
+      `<option value="__custom__" ${models.length === 0 || !models.includes(currentVal) ? 'selected' : ''}>Custom…</option>`;
+    // If switching to a provider with no models, show custom input immediately
+    if (models.length === 0) {
+      const customInput = document.getElementById(`${prefix}-model-custom`);
+      if (customInput) { customInput.style.display = ''; customInput.value = currentVal && !models.includes(currentVal) ? currentVal : ''; }
+    } else if (!models.includes(currentVal)) {
+      const customInput = document.getElementById(`${prefix}-model-custom`);
+      if (customInput) { customInput.style.display = ''; customInput.value = currentVal || ''; }
+    } else {
+      const customInput = document.getElementById(`${prefix}-model-custom`);
+      if (customInput) { customInput.style.display = 'none'; customInput.value = ''; }
+    }
+  }
   // Show/hide base URL row — ID is always `${prefix}-baseurl`
   const needsUrl = newProvider === 'ollama' || newProvider === 'custom';
   const urlInput = document.getElementById(`${prefix}-baseurl`);
@@ -695,18 +710,36 @@ function handleProviderChange(prefix, newProvider) {
   if (urlRow) urlRow.style.display = needsUrl ? '' : 'none';
   if (urlInput) {
     if (needsUrl && !urlInput.value) {
-      // Only auto-fill the default URL for providers that actually need a configurable URL
       urlInput.value = PROVIDERS[newProvider]?.defaultBaseUrl || '';
     } else if (!needsUrl) {
-      // Clear any stale URL when switching to a provider with a fixed, built-in endpoint.
-      // Leaving it filled in causes the URL to persist in saved state and can be
-      // mistaken for an API key on subsequent loads.
       urlInput.value = '';
     }
   }
-  // Dim API key for Ollama (no key needed) — ID is always `${prefix}-apikey`
+  // Dim API key for Ollama (no key needed)
   const keyWrap = document.getElementById(`${prefix}-apikey`)?.parentElement;
   if (keyWrap) { keyWrap.style.opacity = newProvider === 'ollama' ? '0.4' : ''; keyWrap.style.pointerEvents = newProvider === 'ollama' ? 'none' : ''; }
+}
+
+function handleModelSelect(prefix, value) {
+  const customInput = document.getElementById(`${prefix}-model-custom`);
+  if (!customInput) return;
+  if (value === '__custom__') {
+    customInput.style.display = '';
+    // If empty, give it focus so user can start typing
+    if (!customInput.value) setTimeout(() => customInput.focus(), 50);
+  } else {
+    customInput.style.display = 'none';
+    customInput.value = '';
+  }
+}
+
+function getModelValue(prefix) {
+  const select = document.getElementById(`${prefix}-model`);
+  if (!select) return '';
+  if (select.value === '__custom__') {
+    return document.getElementById(`${prefix}-model-custom`)?.value?.trim() || '';
+  }
+  return select.value;
 }
 
 function handlePersonaChange(hallucinatorId, newPersona) {
@@ -748,32 +781,6 @@ function openHistPanel() {
 }
 function closeHistPanel() { document.getElementById('hist-overlay').classList.add('hidden'); releaseFocus(); }
 function handleHistOverlayClick(e) { if (e.target === document.getElementById('hist-overlay')) closeHistPanel(); }
-
-// ── Game handlers ─────────────────────────────────────────────────────────────
-
-function toggleGameSentence(resultId, idx) {
-  const gs = STATE.gameStates[resultId] || { selected: new Set(), revealed: false };
-  if (gs.revealed) return;
-  const next = new Set(gs.selected); next.has(idx) ? next.delete(idx) : next.add(idx);
-  STATE.gameStates = { ...STATE.gameStates, [resultId]: { ...gs, selected: next } }; render();
-}
-function submitGame(resultId) {
-  const gs = STATE.gameStates[resultId] || { selected: new Set(), revealed: false };
-  const result = STATE.hallucinatorResults.find(r => r.id === resultId);
-  STATE.gameStates = { ...STATE.gameStates, [resultId]: { ...gs, revealed: true } }; render();
-  // Victory fanfare easter egg: perfect score
-  if (result?.analysis) {
-    const hallSet = result.analysis.reduce((a, s, i) => { if (s.is_hallucination) a.push(i); return a; }, []);
-    const cor = [...gs.selected].filter(i => hallSet.includes(i)).length;
-    const fp = [...gs.selected].filter(i => !hallSet.includes(i)).length;
-    if (cor === hallSet.length && fp === 0 && hallSet.length > 0) {
-      showToast('🏆 PERFECT! You found every hallucination! 🏆', 'success', 5000);
-    }
-  }
-}
-function resetGame(resultId) {
-  STATE.gameStates = { ...STATE.gameStates, [resultId]: { selected: new Set(), revealed: false } }; render();
-}
 
 // ── Misc handlers ─────────────────────────────────────────────────────────────
 
@@ -896,27 +903,53 @@ async function verifySentenceInline(resultId, idx) {
   container.innerHTML = `<span style="font-size:.75rem;color:var(--text-muted)">🔍 Searching web sources...</span>`;
 
   try {
-    const { verifySentence } = window.SearchAPI || {};
+    const { verifySentence, extractVerificationQuery } = window.SearchAPI || {};
     if (!verifySentence) throw new Error('SearchAPI not available');
 
     const res = await verifySentence(sentence.text);
-    
-    // Evaluate correctness using key terms matching
-    const snippets = res.results.map(sr => sr.snippet).join(' ').toLowerCase();
-    const keyTerms = extractKeyTerms(sentence.text);
-    let matchCount = 0;
-    keyTerms.forEach(term => { if (snippets.includes(term.toLowerCase())) matchCount++; });
-    const confidence = keyTerms.length ? Math.round((matchCount / keyTerms.length) * 100) : 0;
-    
-    let verified = null;
-    if (confidence >= 60) verified = true;
-    else if (confidence <= 30 && res.results.length > 0) verified = false;
+    const query = extractVerificationQuery ? extractVerificationQuery(sentence.text) : sentence.text.slice(0, 120);
 
-    // Render inline results
+    const searchSnippets = res.results.slice(0, 5).map((sr, i) =>
+      `[${i + 1}] ${sr.title}\n    URL: ${sr.url}\n    Snippet: ${sr.snippet}`
+    ).join('\n\n');
+
+    const topicLabel = STATE.adversarialPrompt || STATE.topic || 'Unknown topic';
+    const fullResponse = result.response || '';
+
+    const userMsg = `Original prompt: "${topicLabel}"
+Full AI response: "${fullResponse.slice(0, 3000)}"
+
+Claim to verify (sentence ${idx}): "${sentence.text}"
+${sentence.explanation ? `Analyst's original assessment: ${sentence.explanation}` : ''}
+
+Web search results for this claim:
+${searchSnippets || 'No search results found.'}
+
+Is this claim factually correct? Base your verdict on the search results and your knowledge.`;
+
+    const raw = await callAI(STATE.analyst, VERIFY_SYSTEM, userMsg, _abortController?.signal);
+
+    let aiResult;
+    try {
+      const parsed = JSON.parse(stripMarkdown(raw));
+      aiResult = Array.isArray(parsed) ? parsed[0] : parsed;
+    } catch {
+      aiResult = { verified: null, certainty: 0, explanation: 'Failed to parse AI response', correct_version: null, reason: '' };
+    }
+
+    const verified = aiResult.verified;
+    const certainty = aiResult.certainty ?? 0;
+    const explanation = aiResult.explanation || '';
+    const correctVersion = aiResult.correct_version || null;
+    const reason = aiResult.reason || '';
+
     const statusIcon = verified === true ? '✅' : verified === false ? '❌' : '❓';
     const statusLabel = verified === true ? 'Supported' : verified === false ? 'Refuted' : 'Uncertain';
     const statusColor = verified === true ? 'var(--c-green-tx)' : verified === false ? 'var(--c-red-tx)' : 'var(--c-gray-tx)';
-    
+
+    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+
     let sourcesHTML = '';
     if (res.results.length) {
       sourcesHTML = `<div style="margin-top:.375rem; font-size:.6875rem; color:var(--text-muted)">
@@ -930,11 +963,18 @@ async function verifySentenceInline(resultId, idx) {
         <div style="display:flex; align-items:center; gap:.5rem">
           <span style="font-size:.875rem">${statusIcon}</span>
           <span style="font-weight:600; font-size:.8125rem; color:${statusColor}">${statusLabel}</span>
-          <span style="margin-left:auto; font-family:var(--font-mono); font-size:.6875rem; color:var(--text-muted)">${confidence}% match</span>
+          <span style="margin-left:auto; font-family:var(--font-mono); font-size:.6875rem; color:var(--text-muted)">${certainty}% certainty</span>
+        </div>
+        ${explanation ? `<div style="font-size:.75rem;color:var(--text-sec);margin-top:.25rem">${escHtml(explanation)}</div>` : ''}
+        ${reason ? `<div style="font-size:.6875rem;color:var(--text-muted);margin-top:.125rem">${escHtml(reason)}</div>` : ''}
+        ${correctVersion ? `<div style="margin-top:.25rem;padding:.375rem .5rem;border-radius:var(--r-sm);background:var(--c-green-bg);border:1px solid var(--c-green-bd);font-size:.75rem;color:var(--c-green-tx)"><strong>Correct version:</strong> ${escHtml(correctVersion)}</div>` : ''}
+        <div style="display:flex;gap:.5rem;margin-top:.375rem">
+          <a href="${searchUrl}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🦆 Search on DuckDuckGo</a>
+          <a href="${googleUrl}" target="_blank" style="font-size:.6875rem;color:var(--purple);text-decoration:underline">🔍 Search on Google</a>
         </div>
         ${sourcesHTML}
       </div>`;
-    
+
     showToast('Inline verification complete', 'success');
   } catch (e) {
     console.error(e);
@@ -1070,29 +1110,80 @@ function generatePromptVariants(basePrompt, count = 5) {
 // ── Batch verification using web search ────────────────────────────────────────
 
 async function batchVerifyClaims(sentences, signal) {
-  const { batchVerifySentences } = window.SearchAPI || {};
+  const { batchVerifySentences, extractVerificationQuery } = window.SearchAPI || {};
   const flagged = sentences
     .filter(s => s.verifiable && (s.is_hallucination || (s.accuracy_confidence ?? 100) < 70))
     .slice(0, 8);
-  if (!flagged.length) return sentences.map(s => ({ verified: null, sources: [], summary: 'Not flagged', confidence: 0 }));
+  if (!flagged.length) return sentences.map(s => ({ sentence: s, verified: null, sources: [], summary: 'Not flagged', confidence: 0, query: '', reason: '', explanation: '' }));
 
   const results = await batchVerifySentences(flagged, 2);
 
-  return results.map((r, i) => {
-    const sentence = flagged[i];
-    if (!r.success) return { verified: null, sources: [], summary: r.data?.error || 'Search failed', confidence: 0 };
-    const { data } = r;
-    const snippets = data.results.map(sr => sr.snippet).join(' ').toLowerCase();
-    const sentenceLower = sentence.text.toLowerCase();
-    const keyTerms = extractKeyTerms(sentence.text);
-    let matchCount = 0;
-    keyTerms.forEach(term => { if (snippets.includes(term.toLowerCase())) matchCount++; });
-    const confidence = keyTerms.length ? Math.round((matchCount / keyTerms.length) * 100) : 0;
-    let verified = null;
-    if (confidence >= 60) verified = true;
-    else if (confidence <= 30 && data.results.length > 0) verified = false;
-    return { sentence, verified, sources: data.results, summary: data.results.length ? `${data.results.length} sources found` : 'No sources found', confidence };
-  });
+  const topicLabel = STATE.adversarialPrompt || STATE.topic || 'Unknown topic';
+  const activeResult = STATE.hallucinatorResults.find(r => r.id === STATE.activeResultId);
+  const fullResponse = activeResult?.response || '';
+
+  return batchAIVerify(flagged, results, topicLabel, fullResponse, signal, 2);
+}
+
+async function batchAIVerify(flagged, searchResults, topicLabel, fullResponse, signal, concurrency = 2) {
+  const results = [];
+  for (let i = 0; i < flagged.length; i += concurrency) {
+    const batch = flagged.slice(i, i + concurrency);
+    const batchSearch = searchResults.slice(i, i + concurrency);
+    const batchResults = await Promise.all(batch.map(async (sentence, bi) => {
+      const r = batchSearch[bi];
+      if (!r?.success) return { sentence, verified: null, sources: [], summary: r?.data?.error || 'Search failed', confidence: 0, query: '', reason: '', explanation: '' };
+
+      const { data } = r;
+      const { extractVerificationQuery } = window.SearchAPI || {};
+      const searchSnippets = data.results.slice(0, 5).map((sr, j) =>
+        `[${j + 1}] ${sr.title}\n    URL: ${sr.url}\n    Snippet: ${sr.snippet}`
+      ).join('\n\n');
+      const query = extractVerificationQuery ? extractVerificationQuery(sentence.text) : sentence.text.slice(0, 120);
+
+      if (!data.results.length) {
+        return { sentence, verified: null, sources: [], summary: 'No sources found', confidence: 0, query, reason: '', explanation: 'No web search results available to verify this claim.' };
+      }
+
+      try {
+        const userMsg = `Original prompt: "${topicLabel}"
+Full AI response: "${fullResponse.slice(0, 3000)}"
+
+Claim to verify: "${sentence.text}"
+${sentence.explanation ? `Analyst's original assessment: ${sentence.explanation}` : ''}
+
+Web search results for this claim:
+${searchSnippets}
+
+Is this claim factually correct? Base your verdict on the search results and your knowledge.`;
+
+        const raw = await callAI(STATE.analyst, VERIFY_SYSTEM, userMsg, signal);
+        let aiResult;
+        try {
+          const parsed = JSON.parse(stripMarkdown(raw));
+          aiResult = Array.isArray(parsed) ? parsed[0] : parsed;
+        } catch {
+          aiResult = { verified: null, certainty: 0, explanation: 'Failed to parse AI response', correct_version: null, reason: '' };
+        }
+
+        return {
+          sentence,
+          verified: aiResult.verified,
+          sources: data.results,
+          summary: aiResult.verified === true ? 'Supported by sources' : aiResult.verified === false ? 'Refuted by sources' : 'Uncertain',
+          confidence: aiResult.certainty ?? 0,
+          query,
+          reason: aiResult.reason || '',
+          explanation: aiResult.explanation || '',
+          correctVersion: aiResult.correct_version || null,
+        };
+      } catch (e) {
+        return { sentence, verified: null, sources: data.results, summary: 'AI verification failed: ' + e.message, confidence: 0, query, reason: '', explanation: '' };
+      }
+    }));
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 function extractKeyTerms(text) {
@@ -1164,20 +1255,18 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight') { navigatePresentation(1); return; }
     if (e.key === '1') { setState({ activeMode: 'inducer' }); updatePresentationOverlay(); return; }
     if (e.key === '2') { setState({ activeMode: 'confidence' }); updatePresentationOverlay(); return; }
-    if (e.key === '3') { setState({ activeMode: 'game' }); updatePresentationOverlay(); return; }
-    if (e.key === '4') { setState({ activeMode: 'analytics' }); updatePresentationOverlay(); return; }
-    if (e.key === '5') { setState({ activeMode: 'visualize' }); updatePresentationOverlay(); return; }
-    if (e.key === '6') { setState({ activeMode: 'compare' }); updatePresentationOverlay(); return; }
+    if (e.key === '3') { setState({ activeMode: 'analytics' }); updatePresentationOverlay(); return; }
+    if (e.key === '4') { setState({ activeMode: 'visualize' }); updatePresentationOverlay(); return; }
+    if (e.key === '5') { setState({ activeMode: 'compare' }); updatePresentationOverlay(); return; }
   }
 
   // Global shortcuts (not in input fields)
   if (!inInput) {
     if (e.key === '1') { if (STATE.adversarialPrompt) setState({ activeMode: 'inducer' }); return; }
     if (e.key === '2') { if (STATE.adversarialPrompt) setState({ activeMode: 'confidence' }); return; }
-    if (e.key === '3') { if (STATE.adversarialPrompt) setState({ activeMode: 'game' }); return; }
-    if (e.key === '4') { if (STATE.adversarialPrompt) setState({ activeMode: 'analytics' }); return; }
-    if (e.key === '5') { if (STATE.adversarialPrompt) setState({ activeMode: 'visualize' }); return; }
-    if (e.key === '6') { if (STATE.adversarialPrompt) setState({ activeMode: 'compare' }); return; }
+    if (e.key === '3') { if (STATE.adversarialPrompt) setState({ activeMode: 'analytics' }); return; }
+    if (e.key === '4') { if (STATE.adversarialPrompt) setState({ activeMode: 'visualize' }); return; }
+    if (e.key === '5') { if (STATE.adversarialPrompt) setState({ activeMode: 'compare' }); return; }
     if (e.key === 'p' || e.key === 'P') { if (STATE.adversarialPrompt) enterPresentation(); return; }
   }
 });
@@ -1236,8 +1325,7 @@ document.addEventListener('click', function (e) {
     case 'open-ref': openRefPanel(); document.getElementById('tools-menu')?.classList.add('hidden'); break;
     case 'open-hist': openHistPanel(); break;
     case 'open-gallery': openGalleryPanel(); document.getElementById('tools-menu')?.classList.add('hidden'); break;
-    case 'open-playground': openPlayground(); break;
-    case 'open-verify': openVerifyPanel(); break;
+    case 'open-verify': openVerifyPanel(); document.getElementById('tools-menu')?.classList.add('hidden'); break;
     case 'enter-presentation': enterPresentation(); document.getElementById('share-menu')?.classList.add('hidden'); break;
     case 'exit-readonly': setState({ isReadOnly: false, adversarialPrompt: null, hallucinatorResults: [], activeResultId: null, error: null }); break;
     case 'toggle-export': document.getElementById('export-menu')?.classList.toggle('hidden'); break;
@@ -1257,9 +1345,6 @@ document.addEventListener('click', function (e) {
     }
     case 'toggle-expand': toggleSentenceExpand(el.dataset.resultId, parseInt(el.dataset.idx, 10)); break;
     case 'override': toggleManualOverride(el.dataset.resultId, parseInt(el.dataset.idx, 10), el.dataset.type); break;
-    case 'game-toggle': toggleGameSentence(el.dataset.resultId, parseInt(el.dataset.idx, 10)); break;
-    case 'game-submit': submitGame(el.dataset.resultId); break;
-    case 'game-reset': resetGame(el.dataset.resultId); break;
   }
 });
 

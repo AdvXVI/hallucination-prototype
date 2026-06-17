@@ -7,6 +7,9 @@ const PROVIDERS = {
   openai: { name: 'OpenAI (ChatGPT)', defaultBaseUrl: 'https://api.openai.com', format: 'openai', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'], hint: 'Get your key at platform.openai.com' },
   groq: { name: 'Groq (free tier)', defaultBaseUrl: 'https://api.groq.com/openai', format: 'openai', models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'], hint: 'Free tier at console.groq.com — no credit card needed' },
   google: { name: 'Google (Gemini)', defaultBaseUrl: 'https://generativelanguage.googleapis.com', format: 'google', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro'], hint: 'Free tier at aistudio.google.com — paste your API key exactly as shown' },
+  openrouter: { name: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api', format: 'openai', models: ['mistralai/mistral-7b-instruct:free', 'meta-llama/llama-3.1-8b-instant:free', 'google/gemma-2-9b-it:free', 'deepseek/deepseek-chat:free', 'qwen/qwen-2.5-7b-instruct:free', 'microsoft/phi-3-mini-128k-instruct:free'], hint: 'Free models at openrouter.ai — no credit card needed' },
+  deepseek: { name: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com', format: 'openai', models: ['deepseek-chat', 'deepseek-reasoner'], hint: 'Very cheap API at platform.deepseek.com — ~$0 for light use' },
+  together: { name: 'Together AI', defaultBaseUrl: 'https://api.together.xyz', format: 'openai', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', 'mistralai/Mixtral-8x22B-Instruct-v0.1', 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo', 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free'], hint: '$1 free credit at api.together.xyz — some free models available' },
   ollama: { name: 'Ollama (local)', defaultBaseUrl: 'http://localhost:11434', format: 'openai', models: ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'gemma2', 'qwen2.5'], hint: 'No API key needed — run "ollama serve" before opening the app' },
   custom: { name: 'Custom / Other', defaultBaseUrl: '', format: 'openai', models: [], hint: 'Any OpenAI-compatible endpoint (LM Studio, vLLM, etc.)' },
 };
@@ -54,7 +57,6 @@ const THRESHOLD_MAX = 80;
 const MODES = [
   { id: 'inducer', label: 'Inducer View', sym: '⬡' },
   { id: 'confidence', label: 'Confidence Map', sym: '◎' },
-  { id: 'game', label: 'Game Mode', sym: '◈' },
   { id: 'analytics', label: 'Analytics', sym: '◉' },
   { id: 'visualize', label: 'Visualize', sym: '◐' },
   { id: 'compare', label: 'Compare', sym: '≣' },
